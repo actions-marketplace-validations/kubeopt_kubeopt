@@ -1,5 +1,5 @@
 name: 'KubeOpt Cost Scan'
-description: 'Scan Kubernetes cluster costs and report savings opportunities across AKS, EKS, and GKE. Posts a savings breakdown as a PR comment.'
+description: 'Analyze Kubernetes costs across AKS, EKS, and GKE. Finds savings opportunities and posts a breakdown as a PR comment.'
 
 branding:
   icon: trending-down
