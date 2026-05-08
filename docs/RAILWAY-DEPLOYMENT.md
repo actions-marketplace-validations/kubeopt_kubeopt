@@ -6,7 +6,7 @@ This guide provides step-by-step instructions for deploying KubeOpt to Railway.
 
 1. **Railway Account**: Sign up at [railway.app](https://railway.app)
 2. **GitHub Repository**: KubeOpt code should be pushed to a GitHub repository
-3. **Azure Service Principal**: Follow the [SERVICE-PRINCIPAL-SETUP.md](docs/SERVICE-PRINCIPAL-SETUP.md) guide
+3. **Cloud credentials**: See [AZURE-SETUP.md](setup/AZURE-SETUP.md), [AWS-SETUP.md](setup/AWS-SETUP.md), or [GCP-BILLING-SETUP.md](setup/GCP-BILLING-SETUP.md)
 
 ## Deployment Steps
 

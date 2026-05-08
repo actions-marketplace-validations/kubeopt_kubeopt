@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "🔧 [$(date)] Starting AKS Cost Optimizer..."
+echo "🔧 [$(date)] Starting KubeOpt..."
 echo "📁 Working directory: $(pwd)"
 echo "👤 Running as: $(whoami)"
 echo "🐍 Python version: $(python --version)"
@@ -21,8 +21,8 @@ if [ -d "/tmp/host-azure" ]; then
     chmod -R 700 /home/appuser/.azure
 fi
 
-# Start Flask application
-echo "🚀 Starting Flask application..."
+# Start application
+echo "🚀 Starting application..."
 cd /app
 
 # Use clean architecture entry point
