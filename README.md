@@ -121,10 +121,10 @@ Edit `~/.claude/claude_desktop_config.json`:
 {
   "mcpServers": {
     "kubeopt": {
-      "command": "/path/to/kubeopt/.venv/bin/python3",
-      "args": ["-m", "mcp_server.server"],
+      "command": "uvx",
+      "args": ["kubeopt-mcp"],
       "env": {
-        "KUBEOPT_API_URL": "http://localhost:5001",
+        "KUBEOPT_API_URL": "https://your-kubeopt-instance.com",
         "KUBEOPT_USERNAME": "kubeopt",
         "KUBEOPT_PASSWORD": "your-password"
       }
@@ -142,10 +142,10 @@ Open **Cursor Settings → MCP** and add a new server entry:
 ```json
 {
   "kubeopt": {
-    "command": "/path/to/kubeopt/.venv/bin/python3",
-    "args": ["-m", "mcp_server.server"],
+    "command": "uvx",
+    "args": ["kubeopt-mcp"],
     "env": {
-      "KUBEOPT_API_URL": "http://localhost:5001",
+      "KUBEOPT_API_URL": "https://your-kubeopt-instance.com",
       "KUBEOPT_USERNAME": "kubeopt",
       "KUBEOPT_PASSWORD": "your-password"
     }
@@ -161,10 +161,10 @@ Edit `~/.codeium/windsurf/mcp_config.json` (create it if it doesn't exist):
 {
   "mcpServers": {
     "kubeopt": {
-      "command": "/path/to/kubeopt/.venv/bin/python3",
-      "args": ["-m", "mcp_server.server"],
+      "command": "uvx",
+      "args": ["kubeopt-mcp"],
       "env": {
-        "KUBEOPT_API_URL": "http://localhost:5001",
+        "KUBEOPT_API_URL": "https://your-kubeopt-instance.com",
         "KUBEOPT_USERNAME": "kubeopt",
         "KUBEOPT_PASSWORD": "your-password"
       }

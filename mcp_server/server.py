@@ -533,5 +533,10 @@ async def main():
         )
 
 
+def run():
+    """Sync entry point for uvx / console_scripts."""
+    asyncio.run(main())
+
+
 if __name__ == "__main__":
     asyncio.run(main())
