@@ -2,6 +2,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-green.svg)](https://python.org)
+[![GitHub Marketplace](https://img.shields.io/badge/GitHub%20Marketplace-KubeOpt%20Cost%20Scan-green?logo=github)](https://github.com/marketplace/actions/kubeopt-cost-scan)
 [![GitHub stars](https://img.shields.io/github/stars/kubeopt/kubeopt)](https://github.com/kubeopt/kubeopt/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/kubeopt/kubeopt)](https://github.com/kubeopt/kubeopt/network)
 
@@ -20,6 +21,75 @@ Works with **Azure AKS**, **AWS EKS**, and **Google GKE**.
 - Calculates actual vs optimal costs with specific dollar savings per resource
 - Generates a 3-week implementation plan with kubectl commands ready to execute
 - Dashboard with cost breakdowns, workload analysis, and optimization scores
+
+## GitHub Action
+
+Run a Kubernetes cost scan on every pull request or on a schedule. The action posts a savings summary as a PR comment (upserted on re-runs) and writes results to the GitHub Step Summary.
+
+**What you get on each PR:**
+
+```
+## KubeOpt Cost Scan — 2026-04-27
+
+| Cluster          | Provider | Monthly Spend | Savings Available |
+|------------------|----------|---------------|-------------------|
+| prod-eks-us-east | AWS      | $4,120        | $890/mo           |
+| staging-aks-weu  | Azure    | $1,340        | $210/mo           |
+
+**Total potential savings: $1,100/mo**
+
+<details>
+<summary>Top opportunities</summary>
+
+1. $540/mo — prod-eks-us-east — Rightsize 6 over-provisioned node groups
+2. $350/mo — prod-eks-us-east — Enable HPA on 4 deployments with static replicas
+3. $210/mo — staging-aks-weu  — Remove 3 idle nodes outside business hours
+
+</details>
+```
+
+**Setup — two steps:**
+
+**1. Add secrets** (Settings → Secrets and variables → Actions):
+
+| Secret | Value |
+|--------|-------|
+| `KUBEOPT_URL` | URL of your KubeOpt instance (e.g. `https://demo.kubeopt.com`) |
+| `KUBEOPT_USERNAME` | KubeOpt username |
+| `KUBEOPT_PASSWORD` | KubeOpt password |
+
+**2. Create `.github/workflows/cost-scan.yml`:**
+
+```yaml
+name: K8s Cost Scan
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  schedule:
+    - cron: '0 8 * * 1'   # Every Monday at 08:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  cost-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: kubeopt/kubeopt@v1
+        with:
+          kubeopt-url:      ${{ secrets.KUBEOPT_URL }}
+          kubeopt-username: ${{ secrets.KUBEOPT_USERNAME }}
+          kubeopt-password: ${{ secrets.KUBEOPT_PASSWORD }}
+```
+
+The action is read-only — it never modifies your cluster. PR comments are upserted so re-runs update the existing comment rather than adding a new one.
+
+[Full inputs, outputs, and advanced usage](#github-action-full)
+
+---
 
 ## Claude AI Integration (MCP)
 
@@ -119,7 +189,7 @@ For more on the protocol: [modelcontextprotocol.io](https://modelcontextprotocol
 
 ---
 
-## GitHub Action
+## GitHub Action — Full Reference <a name="github-action-full"></a>
 
 Run a Kubernetes cost scan on every pull request or on a schedule. The action posts a summary as a PR comment (upserted on re-runs) and writes results to the GitHub Step Summary.
 
