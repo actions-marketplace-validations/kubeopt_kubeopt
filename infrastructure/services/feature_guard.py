@@ -10,11 +10,18 @@ from functools import wraps
 from flask import g, jsonify
 from typing import Dict, Any
 
-from infrastructure.services.license_validator import (
-    get_license_validator,
-    LicenseTier,
-    Feature
-)
+try:
+    from kubeopt.infrastructure.services.license_validator import (
+        get_license_validator,
+        LicenseTier,
+        Feature
+    )
+except ImportError:
+    from infrastructure.services.license_validator import (  # type: ignore[no-redef]
+        get_license_validator,
+        LicenseTier,
+        Feature
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -92,21 +99,23 @@ def get_ui_feature_flags() -> Dict[str, Any]:
     validator = get_license_validator()
     tier = validator.get_tier()
     
-    # Base features (NO FREE TIER - everything requires license)
+    # Open-source core features are available without a license. Licenses only
+    # unlock hosted AI and commercial capabilities.
     if tier == LicenseTier.NONE:
         return {
-            'tier': 'NONE',
+            'tier': 'OSS',
             'has_license': False,
-            'can_add_clusters': False,  # Cannot add clusters without license
-            'show_dashboard': False,
-            'show_analysis': False,
-            'show_alerts': False,
-            'show_recommendations': False,
+            'can_add_clusters': True,
+            'show_dashboard': True,
+            'show_analysis': True,
+            'show_alerts': True,
+            'show_recommendations': True,
             'show_ai_plans': False,
-            'show_export': False,
-            'show_settings': True,  # Settings always accessible to add license
-            'cluster_limit': 0,
-            'message': 'PRO or ENTERPRISE license required'
+            'show_export': True,
+            'show_settings': True,
+            'cluster_limit': -1,
+            'analyses_per_day': -1,
+            'message': 'Open-source core enabled; hosted AI features require a license'
         }
     
     # PRO tier features
@@ -119,7 +128,7 @@ def get_ui_feature_flags() -> Dict[str, Any]:
             'show_analysis': True,
             'show_alerts': True,
             'show_recommendations': True,
-            'show_ai_plans': False,  # Not for PRO
+            'show_ai_plans': True,
             'show_export': True,
             'show_settings': True,
             'cluster_limit': 5,

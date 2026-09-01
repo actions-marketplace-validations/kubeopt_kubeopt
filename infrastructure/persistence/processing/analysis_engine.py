@@ -3,7 +3,7 @@
 from pydantic import BaseModel, Field, validator
 Developer: Srinivas Kondepudi
 Organization: Nivaya Technologies & kubeopt
-Project: AKS Cost Optimizer
+Project: KubeOpt
 """
 
 """
@@ -429,7 +429,16 @@ class MultiSubscriptionAnalysisEngine:
                 logger.info(f"✅ Session {session_id}: Merged {len([f for f in cache_fields_to_merge if f in shared_cache.data])} kubernetes cache fields into final_results")
 
             logger.info(f"DEBUG:HPA efficiency: {final_results.get('hpa_efficiency', 0):.1f}%")
-            
+
+            # Attach deterministic recommendations to result
+            try:
+                from kubeopt.assessment.command_generator import generate_recommendations
+                final_results["recommendations"] = [
+                    r.model_dump() for r in generate_recommendations(final_results)
+                ]
+            except Exception:
+                final_results["recommendations"] = []
+
             # Step 6: Generate implementation plan with cluster config support
             self._generate_implementation_plan_with_cluster_config_support(final_results, session_id, log_prefix)
 
@@ -708,19 +717,19 @@ class MultiSubscriptionAnalysisEngine:
             raise ValueError(f"Database save operation failed: {update_error}") from update_error
     
     def _generate_implementation_plan_sync(self, enhanced_input: Dict, cluster_name: str, cluster_id: str):
-        """Generate implementation plan using external API (ENTERPRISE only).
+        """Generate implementation plan using the hosted AI API.
 
         This is a synchronous method — the external API call (requests.post) is
         blocking, so there is no need for async/asyncio.run().
         """
         try:
-            # Check license tier first - only ENTERPRISE can generate AI plans
+            # Check license tier first - hosted AI plan generation is a paid add-on.
             from infrastructure.services.license_validator import get_license_validator, LicenseTier
             validator = get_license_validator()
             tier = validator.get_tier()
 
             if tier != LicenseTier.ENTERPRISE:
-                logger.info(f"⏭️ Skipping AI plan generation for {cluster_name} - requires ENTERPRISE license (current: {tier.value})")
+                logger.info(f"Skipping hosted AI plan generation for {cluster_name} - requires ENTERPRISE license (current: {tier.value})")
                 return None
 
             # Use external API client for plan generation

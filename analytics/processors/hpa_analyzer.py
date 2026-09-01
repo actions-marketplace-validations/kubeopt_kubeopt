@@ -3,7 +3,7 @@
 HPA Analyzer Module - Consistent and Simplified
 Developer: Srinivas Kondepudi
 Organization: Nivaya Technologies & kubeopt
-Project: AKS Cost Optimizer
+Project: KubeOpt
 
 Comprehensive HPA analysis with consistent variable naming.
 """
@@ -22,6 +22,11 @@ try:
 except ImportError:
     # Standards must be available - fail explicitly
     raise ImportError("Performance standards are required but not found")
+
+try:
+    from analytics.processors.pod_cost_analyzer import KubernetesParsingUtils
+except ImportError:
+    from analytics.collectors.cluster_realtime_metrics import KubernetesParsingUtils
 
 logger = logging.getLogger(__name__)
 

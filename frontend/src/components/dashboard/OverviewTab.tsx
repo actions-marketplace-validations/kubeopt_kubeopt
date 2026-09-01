@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getDashboardOverview, getChartData } from '../../api/analysis'
+import { getCollectorStatus, CollectorStatus } from '../../api/collector'
 import { useAutoRefresh } from '../../hooks/useAutoRefresh'
 import { formatCurrency, formatNumber } from '../../utils/format'
-import { DollarSign, TrendingDown, Zap, Server, Gauge } from 'lucide-react'
+import { DollarSign, TrendingDown, Zap, Server, Gauge, Radio } from 'lucide-react'
 import Card from '../common/Card'
 import { OverviewSkeleton } from '../common/Skeleton'
 import OptimizationScoreGauge from '../charts/OptimizationScoreGauge'
@@ -37,13 +38,19 @@ interface Recommendation {
 export default function OverviewTab({ clusterId }: OverviewTabProps) {
   const [overview, setOverview] = useState<Record<string, unknown> | null>(null)
   const [chartData, setChartData] = useState<Record<string, unknown> | null>(null)
+  const [collectorStatus, setCollectorStatus] = useState<CollectorStatus | null>(null)
   const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
     try {
-      const [ov, cd] = await Promise.all([getDashboardOverview(clusterId), getChartData(clusterId)])
+      const [ov, cd, cs] = await Promise.all([
+        getDashboardOverview(clusterId),
+        getChartData(clusterId),
+        getCollectorStatus(clusterId),
+      ])
       setOverview(ov as Record<string, unknown>)
       setChartData(cd as Record<string, unknown>)
+      setCollectorStatus(cs)
     } catch { /* empty */ } finally { setLoading(false) }
   }, [clusterId])
 
@@ -60,13 +67,16 @@ export default function OverviewTab({ clusterId }: OverviewTabProps) {
 
   // Formatting helpers
   const ABBREVS: Record<string, string> = { hpa: 'HPA', cpu: 'CPU', gpu: 'GPU', io: 'I/O', aks: 'AKS', eks: 'EKS', gke: 'GKE' }
-  const titleCase = (s: string) => s.replace(/_/g, ' ').replace(/\b\w+/g, (w) => ABBREVS[w.toLowerCase()] || (w.charAt(0).toUpperCase() + w.slice(1)))
+  const titleCase = (s?: string) => (s || 'Unknown')
+    .replace(/_/g, ' ')
+    .replace(/\b\w+/g, (w) => ABBREVS[w.toLowerCase()] || (w.charAt(0).toUpperCase() + w.slice(1)))
 
   // Cost category data (Compute, Storage, Networking, etc.)
   const costCategories = (chartData?.cost_categories as { name: string; value: number }[]) || []
   // Fallback to namespace-based breakdown if no category data
   const costBreakdown = (chartData?.cost_breakdown as { name: string; value: number }[]) || []
   const costDistributionData = (costCategories.length > 0 ? costCategories : costBreakdown)
+    .filter((d) => d?.name)
     .map((d) => ({ ...d, name: titleCase(d.name) }))
 
   const resourceData = (chartData?.resource_utilization as { name: string; cpu: number; memory: number }[]) || []
@@ -87,8 +97,13 @@ export default function OverviewTab({ clusterId }: OverviewTabProps) {
   const nodeRecs = (chartData?.node_recommendations as { node_name: string; current_vm: string; recommended_vm: string; monthly_savings: number; avg_cpu_pct: number; avg_memory_pct: number; priority: string; reasoning?: string }[]) || []
 
   // Compute average CPU/Memory utilization from resourceData for Node Efficiency metric
-  const avgCpu = resourceData.length > 0 ? resourceData.reduce((s, d) => s + d.cpu, 0) / resourceData.length : 0
-  const avgMem = resourceData.length > 0 ? resourceData.reduce((s, d) => s + d.memory, 0) / resourceData.length : 0
+  const validResourceValues = resourceData
+    .map((d) => ({
+      cpu: Number.isFinite(d.cpu) ? d.cpu : 0,
+      memory: Number.isFinite(d.memory) ? d.memory : 0,
+    }))
+  const avgCpu = validResourceValues.length > 0 ? validResourceValues.reduce((s, d) => s + d.cpu, 0) / validResourceValues.length : 0
+  const avgMem = validResourceValues.length > 0 ? validResourceValues.reduce((s, d) => s + d.memory, 0) / validResourceValues.length : 0
   const nodeEfficiency = (avgCpu + avgMem) / 2
 
   // Key metrics (Optimization Score excluded — shown as gauge)
@@ -100,11 +115,28 @@ export default function OverviewTab({ clusterId }: OverviewTabProps) {
     { icon: Gauge, label: 'Efficiency', value: `${nodeEfficiency.toFixed(0)}%`, color: nodeEfficiency >= 60 ? '#7FB069' : nodeEfficiency >= 40 ? '#eab308' : '#ef4444', iconColor: 'text-orange-500' },
   ]
 
+  const collectorLabel = collectorStatus
+    ? collectorStatus.is_fresh
+      ? `Collector active -- ${new Date(collectorStatus.collected_at).toLocaleTimeString()} (${collectorStatus.nodes}n / ${collectorStatus.pods}p)`
+      : `Collector stale -- last report ${new Date(collectorStatus.collected_at).toLocaleTimeString()}`
+    : null
+
   return (
     <div className="space-y-6">
-      {lastRefresh && (
-        <p className="text-right text-xs text-dark-400">Last updated: {lastRefresh.toLocaleTimeString()}</p>
-      )}
+      <div className="flex items-center justify-between">
+        {collectorLabel ? (
+          <span
+            className="flex items-center gap-1.5 text-xs"
+            style={{ color: collectorStatus?.is_fresh ? 'var(--accent-cyan, #00D4FF)' : 'var(--text-muted)' }}
+          >
+            <Radio size={11} />
+            {collectorLabel}
+          </span>
+        ) : <span />}
+        {lastRefresh && (
+          <p className="text-right text-xs text-dark-400">Last updated: {lastRefresh.toLocaleTimeString()}</p>
+        )}
+      </div>
 
       {/* ─── 1. SCORE + KEY METRICS ─── */}
       <div className="flex flex-col gap-6 md:flex-row md:items-stretch">

@@ -12,11 +12,18 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from presentation.api.v2.schemas.clusters import AnalysisStatus
-from presentation.api.v2.schemas.analysis import ChartDataResponse, CPUOptimizationPlan
+from presentation.api.v2.schemas.analysis import ChartDataResponse, CPUOptimizationPlan, RecommendationSchema
 from presentation.api.v2.dependencies.auth import get_current_user
 from presentation.api.v2.dependencies.services import (
     get_cluster_manager, get_cpu_report_exporter,
     get_analysis_results, get_analysis_cache,
+)
+from assessment.command_generator import generate_recommendations
+from assessment.gpu_evaluator import evaluate_gpu_workloads
+from infrastructure.services.collector_store import get_collector_store
+from infrastructure.demo.demo_data import (
+    is_demo_mode, get_demo_cluster, get_demo_analysis_status, get_demo_chart_data,
+    get_demo_recommendations,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,6 +48,22 @@ def _sanitize_numpy(obj):
 router = APIRouter(prefix="/api", tags=["analysis"])
 
 
+def _append_collector_gpu_recommendations(cluster_id: str, recommendations: list[dict]) -> list[dict]:
+    """Append deterministic GPU recommendations from the latest collector report."""
+    report = get_collector_store().get(cluster_id)
+    if report is None:
+        return recommendations
+
+    gpu_recommendations = [r.model_dump() for r in evaluate_gpu_workloads(report)]
+    if not gpu_recommendations:
+        return recommendations
+
+    existing_ids = {r.get("id") for r in recommendations if isinstance(r, dict)}
+    recommendations.extend(r for r in gpu_recommendations if r.get("id") not in existing_ids)
+    recommendations.sort(key=lambda r: (-float(r.get("priority_score", 0) or 0), str(r.get("id", ""))))
+    return recommendations
+
+
 @router.post("/clusters/{cluster_id:path}/analyze")
 async def analyze_cluster(
     cluster_id: str,
@@ -48,6 +71,9 @@ async def analyze_cluster(
     cluster_manager=Depends(get_cluster_manager),
 ):
     """Trigger analysis for a cluster. Returns session key for progress tracking."""
+    if is_demo_mode() and get_demo_cluster(cluster_id):
+        return {"session_key": cluster_id, "status": "completed", "message": "Demo analysis ready"}
+
     try:
         from infrastructure.services.background_processor import run_subscription_aware_background_analysis
 
@@ -88,6 +114,9 @@ async def analysis_status(
     cluster_manager=Depends(get_cluster_manager),
 ):
     """Get current analysis status for a cluster."""
+    if is_demo_mode() and get_demo_cluster(cluster_id):
+        return AnalysisStatus(**get_demo_analysis_status(cluster_id))
+
     try:
         # Check in-memory tracker first (real-time updates from background_processor)
         from shared.config.config import analysis_status_tracker
@@ -170,6 +199,11 @@ async def chart_data(
     try:
         from presentation.api import chart_generator
         from shared.utils.shared import _get_analysis_data
+
+        if is_demo_mode() and cluster_id:
+            demo_charts = get_demo_chart_data(cluster_id)
+            if demo_charts:
+                return {**demo_charts, 'anomaly_detection': {}}
 
         empty_result = {
             'cost_breakdown': [],
@@ -521,6 +555,29 @@ async def cpu_report(
     except Exception as e:
         logger.error(f"Failed to export CPU report: {e}")
     raise HTTPException(status_code=500, detail="Failed to export report")
+
+
+@router.get("/clusters/{cluster_id:path}/recommendations", response_model=list[RecommendationSchema])
+async def get_recommendations(
+    cluster_id: str,
+    user: Dict[str, Any] = Depends(get_current_user),
+    cluster_manager=Depends(get_cluster_manager),
+):
+    """Return deterministic recommendations for a cluster. No AI required."""
+    if is_demo_mode():
+        demo = get_demo_cluster(cluster_id)
+        if demo:
+            return get_demo_recommendations(cluster_id)
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    cluster = cluster_manager.get_cluster(cluster_id)
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    analysis_data = cluster.get("analysis_data") or {}
+    if "recommendations" in analysis_data:
+        return _append_collector_gpu_recommendations(cluster_id, list(analysis_data["recommendations"]))
+    recommendations = [r.model_dump() for r in generate_recommendations(analysis_data)]
+    return _append_collector_gpu_recommendations(cluster_id, recommendations)
 
 
 @router.get("/debug-analysis")
