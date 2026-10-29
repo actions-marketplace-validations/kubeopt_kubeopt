@@ -26,12 +26,23 @@ function timeAgo(dateStr?: string): string {
   return `${Math.floor(hrs / 24)}d ago`
 }
 
+function metricsStatusLabel(status: CollectorStatus): string {
+  if (status.metrics_server_available) return ''
+  const reason = status.metrics_server_error
+    ? status.metrics_server_error.replace(/_/g, ' ')
+    : 'metrics unavailable'
+  return ` · ${reason}`
+}
+
 function ScoreBadge({ score }: { score: number }) {
   const color = score >= 80 ? 'green' : score >= 60 ? 'yellow' : 'red'
   return <Badge variant={color}>{score.toFixed(0)}%</Badge>
 }
 
-function CostBar({ cost, maxCost }: { cost: number; maxCost: number }) {
+function CostBar({ cost, maxCost }: { cost: number | null; maxCost: number }) {
+  if (cost === null) {
+    return <span className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Unavailable</span>
+  }
   const pct = maxCost > 0 ? Math.min((cost / maxCost) * 100, 100) : 0
   return (
     <div className="flex items-center gap-2">
@@ -96,7 +107,7 @@ export default function ClusterPortfolio() {
     return list
   }, [clusters, search, sortBy, providerFilter])
 
-  const maxCost = useMemo(() => Math.max(...clusters.map((c) => c.total_cost ?? 0), 1), [clusters])
+  const maxCost = useMemo(() => Math.max(...clusters.map((c) => c.total_cost ?? 0).filter((v) => v !== null) as number[], 1), [clusters])
 
   const handleDelete = async () => {
     if (!confirmDelete) return
@@ -339,11 +350,11 @@ export default function ClusterPortfolio() {
                     </td>
                     <td className="px-5 py-3.5 text-xs" style={{ color: 'var(--text-muted)' }}>{cluster.region || '—'}</td>
                     <td className="px-5 py-3.5">
-                      <CostBar cost={cluster.total_cost ?? 0} maxCost={maxCost} />
+                      <CostBar cost={cluster.total_cost ?? null} maxCost={maxCost} />
                     </td>
                     <td className="px-5 py-3.5">
-                      <span className="text-sm font-medium text-green-600 dark:text-green-400">
-                        {formatCurrency(cluster.potential_savings ?? 0)}
+                      <span className={`text-sm font-medium ${cluster.potential_savings == null ? '' : 'text-green-600 dark:text-green-400'}`} style={cluster.potential_savings == null ? { color: 'var(--text-muted)' } : undefined}>
+                        {cluster.potential_savings == null ? 'Unavailable' : formatCurrency(cluster.potential_savings)}
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
@@ -358,12 +369,16 @@ export default function ClusterPortfolio() {
                         const cs = collectorStatuses[cluster.cluster_id]
                         if (!cs) return <span className="text-xs" style={{ color: 'var(--text-muted)' }}>--</span>
                         if (cs.is_fresh) return (
-                          <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--accent-cyan, #00D4FF)' }}>
+                          <span
+                            className="flex items-center gap-1 text-xs"
+                            style={{ color: 'var(--accent-cyan, #00D4FF)' }}
+                            title={cs.metrics_server_available ? 'Collector metrics available' : `Collector metrics unavailable: ${cs.metrics_server_error || 'unknown reason'}`}
+                          >
                             <Radio size={10} />
-                            {timeAgo(cs.collected_at)} &middot; {cs.nodes}n/{cs.pods}p
+                            {timeAgo(cs.collected_at)} &middot; {cs.nodes}n/{cs.pods}p{metricsStatusLabel(cs)}
                           </span>
                         )
-                        return <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Stale {timeAgo(cs.collected_at)}</span>
+                        return <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Stale {timeAgo(cs.collected_at)}{metricsStatusLabel(cs)}</span>
                       })()}
                     </td>
                     <td className="px-5 py-3.5">
@@ -429,14 +444,16 @@ export default function ClusterPortfolio() {
 
               {/* Cost bar */}
               <div className="mt-3">
-                <CostBar cost={cluster.total_cost ?? 0} maxCost={maxCost} />
+                <CostBar cost={cluster.total_cost ?? null} maxCost={maxCost} />
               </div>
 
               {/* Bottom row */}
               <div className="mt-3 flex items-center justify-between border-t pt-3" style={{ borderColor: 'var(--border-subtle)' }}>
                 <div>
                   <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Savings</div>
-                  <div className="text-sm font-semibold text-green-600 dark:text-green-400">{formatCurrency(cluster.potential_savings ?? 0)}</div>
+                  <div className={`text-sm font-semibold ${cluster.potential_savings == null ? '' : 'text-green-600 dark:text-green-400'}`} style={cluster.potential_savings == null ? { color: 'var(--text-muted)' } : undefined}>
+                    {cluster.potential_savings == null ? 'Unavailable' : formatCurrency(cluster.potential_savings)}
+                  </div>
                 </div>
                 <div className="text-right">
                   <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Nodes</div>
@@ -449,7 +466,9 @@ export default function ClusterPortfolio() {
                 return (
                   <div className="mt-2 flex items-center gap-1 text-xs" style={{ color: cs.is_fresh ? 'var(--accent-cyan, #00D4FF)' : 'var(--text-muted)' }}>
                     <Radio size={10} />
-                    {cs.is_fresh ? `Collected ${timeAgo(cs.collected_at)} · ${cs.nodes}n/${cs.pods}p` : `Stale ${timeAgo(cs.collected_at)}`}
+                    {cs.is_fresh
+                      ? `Collected ${timeAgo(cs.collected_at)} · ${cs.nodes}n/${cs.pods}p${metricsStatusLabel(cs)}`
+                      : `Stale ${timeAgo(cs.collected_at)}${metricsStatusLabel(cs)}`}
                   </div>
                 )
               })()}
